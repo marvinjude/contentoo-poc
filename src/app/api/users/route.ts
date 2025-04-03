@@ -1,32 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import { User } from '@/models/user';
-import { getAuthFromRequest } from '@/lib/server-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { User } from "@/models/user";
+import { APIHandler, RequestParams } from "@/lib/api-middleware";
+import type { AuthCustomer } from "@/lib/auth";
 
-export async function GET(request: NextRequest) {
-  try {
-    // Get the customer ID from auth
-    const auth = getAuthFromRequest(request);
-    if (!auth.customerId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+// Define the specific parameters for this endpoint
+interface UsersParams extends RequestParams {
+  query: {
+    limit?: string;
+    search?: string;
+  };
+}
 
-    await connectDB();
-    
-    // Filter users by customerId
-    const users = await User.find({ customerId: auth.customerId })
-      .select('userId userName createdAt updatedAt')
-      .sort({ createdAt: -1 });
-    
-    return NextResponse.json({ users }, { status: 200 });
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
+async function handler(
+  request: NextRequest,
+  auth: AuthCustomer,
+  params: UsersParams
+) {
+  const { limit = "10", search } = params.query;
+
+  const query: any = { customerId: auth.customerId };
+
+  if (search) {
+    query.userName = { $regex: search, $options: "i" };
   }
-} 
+
+  const users = await User.find(query)
+    .select("userId userName createdAt updatedAt")
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit, 10));
+
+  return NextResponse.json({ users }, { status: 200 });
+}
+
+export const GET = APIHandler<UsersParams>(handler);

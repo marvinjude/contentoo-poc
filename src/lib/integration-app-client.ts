@@ -16,6 +16,10 @@ export async function getIntegrationClient(auth: AuthCustomer): Promise<Integrat
     // Generate a fresh token for the customer
     const token = await generateIntegrationToken(auth);
 
+    console.log({
+      token,
+    });
+
     // Create a new client instance with the fresh token
     // We create a new instance each time to ensure we're using a fresh token
     const client = new IntegrationAppClient({

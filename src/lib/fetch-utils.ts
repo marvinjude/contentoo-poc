@@ -1,23 +1,32 @@
-import { ensureAuth } from './auth';
+import { ensureAuth } from "./auth";
 
 export const getAuthHeaders = () => {
   const auth = ensureAuth();
   return {
-    'x-auth-id': auth.customerId,
-    'x-customer-name': auth.customerName || '',
+    "x-auth-id": auth.customerId,
+    "x-customer-name": auth.customerName || "",
   };
 };
 
-export const authenticatedFetcher = async <T>(url: string): Promise<T> => {
+export const authenticatedFetcher = async <T>(
+  url: string,
+  options: RequestInit = {}
+): Promise<T> => {
   const res = await fetch(url, {
-    headers: getAuthHeaders(),
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...options.headers,
+    },
   });
 
   if (!res.ok) {
-    const error = new Error('An error occurred while fetching the data.') as Error & { status?: number };
+    const error = new Error(
+      "An error occurred while fetching the data."
+    ) as Error & { status?: number };
     error.status = res.status;
     throw error;
   }
 
   return res.json();
-}; 
+};

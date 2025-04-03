@@ -43,10 +43,10 @@ export function Header() {
                 Integrations
               </Link>
               <Link
-                href="/users"
+                href="/tasks"
                 className="inline-flex items-center px-1 pt-1 text-sm font-medium"
               >
-                Users
+                Tasks
               </Link>
             </div>
           </div>
