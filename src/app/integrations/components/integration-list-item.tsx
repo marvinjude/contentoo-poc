@@ -2,9 +2,7 @@
 
 import { useIntegrationApp } from "@integration-app/react";
 import type { Integration as IntegrationAppIntegration } from "@integration-app/sdk";
-import { useSyncStatus } from "@/hooks/use-sync-status";
 import { toast } from "sonner";
-import { SyncStatusType } from "@/models/sync-status";
 import { authenticatedFetcher } from "@/lib/fetch-utils";
 import { useState } from "react";
 
@@ -19,34 +17,28 @@ export function IntegrationListItem({
 }: IntegrationListItemProps) {
   const integrationApp = useIntegrationApp();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isConfiguring, setIsConfiguring] = useState(false);
 
-  const { status: syncStatus, isLoading: isSyncLoading } = useSyncStatus({
-    connectionId: integration.connection?.id,
-    shouldRefresh: isSyncing,
-    onSuccess: () => {
-      toast.success("Sync completed successfully");
-      onRefresh();
-    },
-    onError: (error) => {
-      toast.error(error || "Sync failed");
-    },
-  });
-
-  console.log(syncStatus);
-
-  const startSync = async (connectionId: string, integrationId: string) => {
+  const handleSync = async () => {
+    if (!integration.connection?.id) return;
     try {
+      setIsSyncing(true);
       await authenticatedFetcher(
-        `/api/integration/${connectionId}/sync-tasks`,
+        `/api/integration/${integration.connection.id}/sync-tasks`,
         {
           method: "POST",
-          body: JSON.stringify({ integrationId }),
+          body: JSON.stringify({ 
+            integrationId: integration.connection.integrationId 
+          }),
         }
       );
-
-      setIsSyncing(true);
+      toast.success("Sync completed successfully");
+      onRefresh();
     } catch (error) {
-      console.error("Failed to start sync:", error);
+      console.error("Failed to sync:", error);
+      toast.error("Failed to sync tasks");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -61,30 +53,35 @@ export function IntegrationListItem({
         return;
       }
 
+      // Run the get-users-and-create-data-link flow
+      try {
+        await integrationApp
+          .connection(connection.id)
+          .flow('get-users-and-create-data-link')
+          .run({
+            input: {
+              integrationKey: integration.key
+            }
+          });
+      } catch (error) {
+        console.error("Failed to run get-users flow:", error);
+        toast.error("Failed to setup integration data");
+        return;
+      }
+
       const integrationId = connection.integrationId;
       const IntNeedsDataSourceAndFieldMapping = ["asana", "monday", "notion"];
 
-      if (
-        IntNeedsDataSourceAndFieldMapping.includes(
-          connection.name.toLowerCase()
-        )
-      ) {
-        await integrationApp
-          .connection(connection.id)
-          .dataSource("tasks")
-          .openConfiguration();
-
-        await integrationApp
-          .connection(connection.id)
-          .fieldMapping("task")
-          .openConfiguration();
+      if (IntNeedsDataSourceAndFieldMapping.includes(
+        connection.name.toLowerCase()
+      )) {
+        handleSync();
       }
-
-      startSync(connection.id, integrationId);
 
       onRefresh();
     } catch (error) {
       console.error("Failed to connect:", error);
+      toast.error("Failed to connect integration");
     }
   };
 
@@ -98,18 +95,15 @@ export function IntegrationListItem({
     }
   };
 
-  const getSyncStatusText = () => {
-    if (!syncStatus) return null;
-
-    switch (syncStatus.status) {
-      case SyncStatusType.INPROGRESS:
-        return "Syncing...";
-      case SyncStatusType.COMPLETED:
-        return "Sync completed";
-      case SyncStatusType.FAILED:
-        return "Sync failed";
-      default:
-        return null;
+  const handleConfigure = async () => {
+    try {
+      setIsConfiguring(true);
+      await integrationApp.integration(integration.key).open();
+    } catch (error) {
+      console.error("Failed to open configuration:", error);
+      toast.error("Failed to open configuration");
+    } finally {
+      setIsConfiguring(false);
     }
   };
 
@@ -133,32 +127,48 @@ export function IntegrationListItem({
         <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">
           {integration.name}
         </h3>
-        {isSyncLoading && (
+        {isSyncing && (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Loading sync status...
-          </p>
-        )}
-        {syncStatus && (
-          <p
-            className={`text-sm ${syncStatus.status === SyncStatusType.FAILED
-              ? "text-red-500 dark:text-red-400"
-              : "text-gray-500 dark:text-gray-400"
-              }`}
-          >
-            {getSyncStatusText()}
+            Syncing...
           </p>
         )}
       </div>
       <div className="flex space-x-2">
+        {integration.connection && (
+          <>
+            <button
+              onClick={handleConfigure}
+              disabled={isConfiguring}
+              className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                isConfiguring 
+                  ? "bg-gray-200 text-gray-400 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed"
+                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+              }`}
+            >
+              {isConfiguring ? "Configuring..." : "Configure"}
+            </button>
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                isSyncing
+                  ? "bg-gray-200 text-gray-400 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-700 dark:text-blue-100 hover:bg-blue-200 hover:text-blue-800 dark:hover:bg-blue-800 dark:hover:text-blue-100"
+              }`}
+            >
+              {isSyncing ? "Syncing..." : "Sync"}
+            </button>
+          </>
+        )}
         <button
           onClick={() =>
             integration.connection ? handleDisconnect() : handleConnect()
           }
-          className={`px-4 py-2 rounded-md font-medium transition-colors ${integration.connection
-            ? "bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 hover:bg-red-200 hover:text-red-800 dark:hover:bg-red-800 dark:hover:text-red-100"
-            : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-700 dark:hover:text-blue-100"
-            }`}
-          disabled={isSyncLoading}
+          className={`px-4 py-2 rounded-md font-medium transition-colors ${
+            integration.connection
+              ? "bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 hover:bg-red-200 hover:text-red-800 dark:hover:bg-red-800 dark:hover:text-red-100"
+              : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-700 dark:hover:text-blue-100"
+          }`}
         >
           {integration.connection ? "Disconnect" : "Connect"}
         </button>
