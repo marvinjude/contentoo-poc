@@ -11,26 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-
-// Define a type for the freelancer object that might be returned from the API
-interface FreelancerData {
-  id: string;
-  email: string;
-}
-
-interface ITask {
-  id: string;
-  title: string;
-  description: string;
-  createdAt: string;
-  source: string;
-  status: string;
-  freelancerEmail?: string;
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState } from "react"
+import { toast } from "sonner"
+import { authenticatedFetcher } from "@/lib/fetch-utils"
 
 export function TaskList() {
-  const { tasks, isLoading, isError, error } = useTasks()
+  const { tasks, isLoading, isError, error, mutate } = useTasks()
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
 
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -44,6 +32,32 @@ export function TaskList() {
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
     }
   };
+
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+
+    try {
+      setUpdatingTaskId(taskId)
+
+      // Call the API endpoint to update the task status using authenticatedFetcher
+      await authenticatedFetcher(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      // Refresh the tasks list
+      await mutate()
+
+      toast.success("Task status updated successfully")
+    } catch (error) {
+      console.error("Failed to update task status:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to update task status")
+    } finally {
+      setUpdatingTaskId(null)
+    }
+  }
 
   if (isError) {
     return (
@@ -75,14 +89,30 @@ export function TaskList() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tasks.map((task: ITask) => (
+            {tasks.map((task) => (
               <TableRow key={task.id}>
-                <TableCell className="font-medium">{task.title}</TableCell>
-                <TableCell>{task.description}</TableCell>
+                <TableCell className="font-medium">{task.title || 'Untitled'}</TableCell>
+                <TableCell>{task.description || 'No description'}</TableCell>
                 <TableCell>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                    {task.status ? task.status.replace(/_/g, ' ') : 'N/A'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+                      {task.status ? task.status.replace(/_/g, ' ') : 'N/A'}
+                    </span>
+                    <Select
+                      defaultValue={task.status}
+                      onValueChange={(value: string) => handleStatusChange(task.id, value)}
+                      disabled={updatingTaskId === task.id}
+                    >
+                      <SelectTrigger className="w-[140px] h-8">
+                        <SelectValue placeholder="Change status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todo">Todo</SelectItem>
+                        <SelectItem value="done">Done</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </TableCell>
                 <TableCell>{format(new Date(task.createdAt), "PPP")}</TableCell>
                 <TableCell>{task.source || "N/A"}</TableCell>

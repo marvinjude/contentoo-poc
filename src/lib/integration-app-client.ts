@@ -1,24 +1,22 @@
-import { IntegrationAppClient } from '@integration-app/sdk';
-import { generateIntegrationToken } from './integration-token';
-import type { AuthCustomer } from './auth';
+import { IntegrationAppClient } from "@integration-app/sdk";
+import { generateIntegrationToken } from "./integration-token";
+import type { AuthCustomer } from "./auth";
 
 let clientInstance: IntegrationAppClient | null = null;
 
 export class IntegrationClientError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'IntegrationClientError';
+    this.name = "IntegrationClientError";
   }
 }
 
-export async function getIntegrationClient(auth: AuthCustomer): Promise<IntegrationAppClient> {
+export async function getIntegrationClient(
+  auth: AuthCustomer
+): Promise<IntegrationAppClient> {
   try {
     // Generate a fresh token for the customer
     const token = await generateIntegrationToken(auth);
-
-    console.log({
-      token,
-    });
 
     // Create a new client instance with the fresh token
     // We create a new instance each time to ensure we're using a fresh token
@@ -28,9 +26,11 @@ export async function getIntegrationClient(auth: AuthCustomer): Promise<Integrat
 
     return client;
   } catch (error) {
-    console.error('Failed to initialize Integration.app client:', error);
+    console.error("Failed to initialize Integration.app client:", error);
     throw new IntegrationClientError(
-      error instanceof Error ? error.message : 'Failed to initialize Integration.app client'
+      error instanceof Error
+        ? error.message
+        : "Failed to initialize Integration.app client"
     );
   }
 }
@@ -39,7 +39,9 @@ export async function getIntegrationClient(auth: AuthCustomer): Promise<Integrat
  * Use this when you need to ensure a single client instance is reused
  * Note: The token used will be from when the client was first initialized
  */
-export async function getSharedIntegrationClient(auth: AuthCustomer): Promise<IntegrationAppClient> {
+export async function getSharedIntegrationClient(
+  auth: AuthCustomer
+): Promise<IntegrationAppClient> {
   if (!clientInstance) {
     clientInstance = await getIntegrationClient(auth);
   }
@@ -51,4 +53,4 @@ export async function getSharedIntegrationClient(auth: AuthCustomer): Promise<In
  */
 export function resetSharedIntegrationClient(): void {
   clientInstance = null;
-} 
+}
